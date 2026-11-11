@@ -1,0 +1,9 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+# local test artefacts
+shots/
+prof/
+testdata/
+agent/web/_*.html

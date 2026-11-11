@@ -1,0 +1,30 @@
+[Unit]
+Description=Drone Panel - web control panel for this Jetson
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__USER__
+SupplementaryGroups=systemd-journal adm
+WorkingDirectory=/opt/drone-panel
+Environment=DRONE_PANEL_CONFIG=/etc/drone-panel/config.yaml
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/drone-panel/.venv/bin/python -m app
+Restart=always
+RestartSec=3
+
+# Resource caps: the panel can never starve flight / vision software.
+# (Web-terminal shells run in their own transient units, outside these limits.)
+CPUQuota=25%
+CPUWeight=20
+MemoryHigh=300M
+MemoryMax=450M
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

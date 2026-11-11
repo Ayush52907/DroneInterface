@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Start mission pipeline",
+    "description": "Camera → detection → tracking → geotag → survivor manager, each verified running",
+    "color": "green", "confirm": false,
+    "steps": [
+      {"type": "service", "unit": "rudra_camera.service", "op": "start", "wait": true},
+      {"type": "service", "unit": "rudra_detection.service", "op": "start", "wait": true},
+      {"type": "service", "unit": "rudra_tracking.service", "op": "start", "wait": true},
+      {"type": "service", "unit": "rudra_geotag.service", "op": "start", "wait": true},
+      {"type": "service", "unit": "rudra_survivor_manager.service", "op": "start", "wait": true}
+    ]
+  },
+  {
+    "name": "Stop mission pipeline",
+    "description": "Stops the rudra services in reverse order",
+    "color": "red", "confirm": true,
+    "steps": [
+      {"type": "service", "unit": "rudra_survivor_manager.service", "op": "stop", "wait": true},
+      {"type": "service", "unit": "rudra_geotag.service", "op": "stop", "wait": true},
+      {"type": "service", "unit": "rudra_tracking.service", "op": "stop", "wait": true},
+      {"type": "service", "unit": "rudra_detection.service", "op": "stop", "wait": true},
+      {"type": "service", "unit": "rudra_camera.service", "op": "stop", "wait": true}
+    ]
+  },
+  {
+    "name": "Gimbal → flight position",
+    "description": "FOLLOW mode, siyi-pitch brings it to its target pitch (verified)",
+    "color": "blue", "confirm": false,
+    "steps": [{"type": "gimbal"}]
+  }
+]

@@ -1,0 +1,76 @@
+# Drone Panel configuration. Restart the service after editing:
+#   sudo systemctl restart drone-panel
+
+server:
+  host: 127.0.0.1        # keep on localhost; Tailscale Serve provides HTTPS access
+  port: 8080
+  tailscale_direct_port: null  # off: HTTPS only. Set e.g. 8080 to also serve http://<tailscale-ip>:8080 (for shared users)
+
+auth:
+  mode: tailscale        # tailscale | none (none = no identity check, dev only!)
+  allowed_users: []      # e.g. ["you@gmail.com", "teammate@gmail.com"]; empty = whole tailnet
+
+files:
+  roots:                 # folders the file manager can access
+    - "~/"               # home of the service user (/home/orin); quote it, bare ~ means null in YAML
+  bookmarks: []          # e.g. - {name: Pipeline, path: ~/pipeline}
+
+services:
+  pinned: []             # extra units to show under "My services", e.g. [nvargus-daemon]
+  hidden: []             # custom units to hide from "My services"
+
+stats:
+  interval: 1.0          # seconds between samples while the dashboard is open
+  history: 300           # samples kept for sparklines
+
+network_targets:         # devices checked on the Hardware page (and usable in Preflight)
+  - {name: SIYI A8 mini camera, host: 192.168.144.25, kind: rtsp, port: 8554, path: /main.264}
+  - {name: SIYI gimbal control, host: 192.168.144.25, kind: ping}
+
+ros:
+  setup:                 # sourced (in order) by the ROS 2 helper
+    - /opt/ros/jazzy/setup.bash
+    - ~/autonomous-payload-drone-/ros2_ws/install/setup.bash
+  domain_id: null        # null = ROS default (0) / same as your services
+
+terminal:
+  enabled: true
+  keep_alive_minutes: 30 # a disconnected terminal stays alive this long (survives link drops)
+
+cameras:                 # live preview on the Camera page (only runs while someone watches)
+  - {name: SIYI A8 mini, url: "rtsp://192.168.144.25:8554/main.264", codec: auto}  # auto: asks the camera (SIYI sends H.265)
+
+camera_preview:
+  max_minutes: 5         # each preview stops by itself after this long (press Resume to continue)
+
+flight_data:             # Flight data page
+  session_gap_minutes: 10   # "sessions" mode: a gap longer than this starts a new session
+  sources:
+    - name: Geotag runs     # numbered run folders shared by these folders (geo_gps/4, geo_dets/4, ...)
+      mode: runs
+      folders: [~/geo_gps, ~/geo_rtsp, ~/geo_calc, ~/geo_dets, ~/target_images]
+      files: [~/targets.txt, ~/targets_clustered.txt]   # latest results (overwritten every run)
+    - name: Detections
+      mode: sessions
+      folders: [~/detections/raw, ~/detections/detected]
+    - name: Detection logs
+      mode: sessions
+      folders: [~/detlogs]
+
+gimbal:                  # SIYI gimbal controls on the Camera page
+  service: siyi-pitch.service                        # owns the flight position
+  flight_script: ~/siyi-python-sdk/pitch_down.py     # TARGET_PITCH is read from here
+  flight_pitch: -90                                  # used only if the script can't be read
+  tolerance: 5                                       # degrees: pitch must be within this of the target
+  yaw_tolerance: 5                                   # degrees: yaw must be within this of 0 (camera not rotated)
+
+alerts:                  # shown in the panel + as browser notifications
+  camera_lost: {enabled: true}
+  usb_ttl:
+    enabled: true
+    devices:
+      - {name: USB-TTL (CP2102), vid: "10c4", pid: "ea60"}
+    flap_count: 3        # "unstable" if it drops this many times...
+    flap_minutes: 5      # ...within this many minutes
+  port_conflict: {enabled: true}
+  gimbal: {enabled: true, after_seconds: 10}   # warn if out of flight position this long

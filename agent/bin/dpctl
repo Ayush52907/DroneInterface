@@ -1,0 +1,80 @@
+#!/bin/bash
+# dpctl: the ONLY privileged entry point used by Drone Panel (via sudoers).
+# Allows: start/stop/restart/enable/disable/reset-failed of existing, root-owned
+# system unit files, listing which processes hold serial/video devices (read-only),
+# and opening a login shell as the panel user (never root).
+set -euo pipefail
+PANEL_USER="__USER__"
+die() { echo "dpctl: $*" >&2; exit 2; }
+[[ $# -ge 1 ]] || die "usage: dpctl <action> <unit> | dpctl unit-write|unit-delete <unit> | dpctl owners | dpctl shell"
+cmd=$1; shift
+
+check_unit() {
+  local unit=$1 frag real
+  [[ "$unit" =~ ^[A-Za-z0-9@._:-]+\.service$ ]] || die "invalid unit name"
+  frag=$(systemctl show -p FragmentPath --value -- "$unit")
+  [[ -n "$frag" ]] || die "unit not found: $unit"
+  real=$(readlink -f -- "$frag")
+  for p in "$frag" "$real"; do
+    case "$p" in
+      /etc/systemd/system/*|/lib/systemd/system/*|/usr/lib/systemd/system/*|/usr/local/lib/systemd/system/*) ;;
+      *) die "unit file location not allowed: $p" ;;
+    esac
+  done
+  [[ "$(stat -c %u -- "$real")" == 0 ]] || die "unit file not owned by root: $real"
+}
+
+case "$cmd" in
+  start|stop|restart|enable|disable|reset-failed)
+    [[ $# -eq 1 ]] || die "expected exactly one unit"
+    check_unit "$1"
+    exec systemctl --no-ask-password "$cmd" -- "$1"
+    ;;
+  unit-write|unit-delete)
+    # create/replace or delete a custom unit file in /etc/systemd/system
+    [[ $# -eq 1 ]] || die "expected exactly one unit"
+    name=$1
+    [[ "$name" =~ ^[A-Za-z0-9@._:-]+\.service$ ]] || die "invalid unit name"
+    target=/etc/systemd/system/$name
+    backup=/var/backups/drone-panel/units
+    [[ -L "$target" ]] && die "$target is a symlink; not editable"
+    for d in /lib/systemd/system /usr/lib/systemd/system; do
+      [[ -e "$d/$name" ]] && die "$name is provided by a system package; not editable here"
+    done
+    if [[ -e "$target" ]] && dpkg -S "$target" >/dev/null 2>&1; then die "$target belongs to a package; not editable"; fi
+    mkdir -p "$backup"
+    if [[ "$cmd" == unit-write ]]; then
+      tmp=$(mktemp)
+      head -c 65536 > "$tmp"
+      grep -q '^\[Service\]' "$tmp" || { rm -f "$tmp"; die "unit file has no [Service] section"; }
+      [[ -f "$target" ]] && cp -p "$target" "$backup/$name.$(date +%Y%m%d-%H%M%S)"
+      install -m 644 -o root -g root "$tmp" "$target"
+      rm -f "$tmp"
+      systemctl daemon-reload
+      echo "saved $target"
+    else
+      [[ -f "$target" ]] || die "$target not found"
+      systemctl disable --now -- "$name" >/dev/null 2>&1 || true
+      mv "$target" "$backup/$name.deleted.$(date +%Y%m%d-%H%M%S)"
+      systemctl daemon-reload
+      systemctl reset-failed -- "$name" >/dev/null 2>&1 || true
+      echo "deleted $target (backup in $backup)"
+    fi
+    ;;
+  owners)
+    # read-only: which processes hold serial / video devices open
+    [[ $# -eq 0 ]] || die "owners takes no arguments"
+    exec find /proc -mindepth 3 -maxdepth 3 -path "/proc/[0-9]*/fd/*" -type l \
+      \( -lname "/dev/ttyTHS*" -o -lname "/dev/ttyTCU*" -o -lname "/dev/ttyUSB*" -o -lname "/dev/ttyACM*" \
+         -o -lname "/dev/ttyAMA*" -o -lname "/dev/video*" \) -printf "%h %l\n" 2>/dev/null
+    ;;
+  shell)
+    [[ $# -eq 0 ]] || die "shell takes no arguments"
+    home=$(getent passwd "$PANEL_USER" | cut -d: -f6)
+    [[ -d "$home" ]] || home=/
+    exec systemd-run --quiet --collect --pty --uid="$PANEL_USER" --gid="$PANEL_USER" \
+      -p "WorkingDirectory=$home" -p "Description=Drone Panel terminal" --setenv=HOME="$home" \
+      --setenv=TERM=xterm-256color --setenv=COLORTERM=truecolor /bin/bash -l
+    ;;
+  *) die "unknown command: $cmd" ;;
+esac

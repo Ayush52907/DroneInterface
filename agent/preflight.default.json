@@ -1,0 +1,93 @@
+[
+  {
+    "name": "Flight controller UART present",
+    "type": "device",
+    "path": "/dev/ttyTHS1",
+    "severity": "critical"
+  },
+  {
+    "name": "Flight controller port used by exactly one program",
+    "type": "serial_owner",
+    "path": "/dev/ttyTHS1",
+    "severity": "critical"
+  },
+  {
+    "name": "Ethernet link (camera)",
+    "type": "link",
+    "iface": "enP8p1s0",
+    "severity": "critical"
+  },
+  {
+    "name": "SIYI A8 mini video stream",
+    "type": "rtsp",
+    "host": "192.168.144.25",
+    "port": 8554,
+    "path": "/main.264",
+    "severity": "critical"
+  },
+  {
+    "name": "Camera node service",
+    "type": "service",
+    "unit": "rudra_camera.service",
+    "severity": "critical"
+  },
+  {
+    "name": "Detection service",
+    "type": "service",
+    "unit": "rudra_detection.service",
+    "severity": "critical"
+  },
+  {
+    "name": "Tracking service",
+    "type": "service",
+    "unit": "rudra_tracking.service",
+    "severity": "critical"
+  },
+  {
+    "name": "Geotag service",
+    "type": "service",
+    "unit": "rudra_geotag.service",
+    "severity": "critical"
+  },
+  {
+    "name": "Survivor manager service",
+    "type": "service",
+    "unit": "rudra_survivor_manager.service",
+    "severity": "critical"
+  },
+  {
+    "name": "Tracking node in ROS graph",
+    "type": "ros_node",
+    "node": "/rudra_tracking_node",
+    "severity": "critical"
+  },
+  {
+    "name": "Gimbal pitch service",
+    "type": "service",
+    "unit": "siyi-pitch.service",
+    "severity": "warning"
+  },
+  {
+    "name": "Gimbal in flight position",
+    "type": "gimbal",
+    "severity": "critical"
+  },
+  {
+    "name": "Disk space on /",
+    "type": "disk",
+    "path": "/",
+    "min_gb": 5,
+    "severity": "warning"
+  },
+  {
+    "name": "Temperature",
+    "type": "temp",
+    "max_c": 85,
+    "severity": "warning"
+  },
+  {
+    "name": "Tailscale connected",
+    "type": "tailscale",
+    "severity": "warning"
+  }
+]
