@@ -293,6 +293,18 @@ mark { background: #a16207; color: #fff; border-radius: 2px; }
 .leaflet-control-scale-line { background: rgba(8,11,15,.75); color: #fff; border-color: #fff; }
 .leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line); }
 
+/* ---------- payload ---------- */
+.servo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.servo-btn { position: relative; display: grid; gap: 4px; justify-items: center; padding: 16px 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; }
+.servo-btn:hover:not(:disabled) { border-color: var(--accent); }
+.servo-btn:disabled { opacity: .6; cursor: wait; }
+.servo-btn.release { border-color: #7a2c2f; background: #2a1416; }
+.servo-btn.release:hover:not(:disabled) { border-color: var(--bad); }
+.servo-btn.rest { border-color: #1f6b4f; background: #0f241d; }
+.servo-btn.current { box-shadow: 0 0 0 3px var(--accent); }
+.servo-btn .mono { color: var(--muted); font-size: 12.5px; }
+.servo-now { position: absolute; top: 6px; right: 8px; font-size: 10.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+
 /* ---------- gimbal ---------- */
 .flightpos { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); }
 .flightpos.ok { border-color: #1f6b4f; background: #0f241d; } .flightpos.ok > div > div:first-child { color: var(--ok); }

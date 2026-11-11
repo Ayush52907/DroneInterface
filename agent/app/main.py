@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from . import audit, camera, files, flightdata, hardware, logs, preflight, services, terminal
 from .alerts import engine as alerts
 from .gimbal import gimbal
-from . import actions, mapdata
+from . import actions, mapdata, payload
 from .ros import bridge as ros_bridge
 from .auth import require_user, ws_user
 from .config import CONFIG, WEB_DIR
@@ -510,6 +510,35 @@ async def actions_run(aid: str, user: dict = Depends(require_user)):
             yield line
         audit.record(user, "action.run", name, last.startswith("DONE"), last.strip())
     return StreamingResponse(gen(), media_type="text/plain; charset=utf-8", headers={"X-Accel-Buffering": "no", "Cache-Control": "no-store"})
+
+
+# ------------------------------------------------------------------ payload servos
+@api.get("/payload")
+def payload_status():
+    return payload.status()
+
+
+@api.put("/payload")
+def payload_save(user: dict = Depends(require_user), config: dict = Body(..., embed=True)):
+    d = payload.save(config)
+    audit.record(user, "payload.config", ", ".join(c["name"] for c in d["configs"]))
+    return d
+
+
+@api.post("/payload/reset")
+def payload_reset(user: dict = Depends(require_user)):
+    audit.record(user, "payload.config.reset", "defaults from drop_drop.py")
+    return payload.reset()
+
+
+@api.post("/payload/{cfg_id}/set")
+async def payload_set(cfg_id: str, user: dict = Depends(require_user), pwm: int = Body(..., embed=True)):
+    return await payload.command(cfg_id, pwm, user, audit)
+
+
+@api.post("/payload/read")
+async def payload_read():
+    return await payload.read_outputs()
 
 
 # ------------------------------------------------------------------ alerts

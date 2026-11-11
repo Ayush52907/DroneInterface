@@ -15,6 +15,7 @@ import { Camera } from './pages/camera.js';
 import { Data } from './pages/data.js';
 import { Actions } from './pages/actions.js';
 import { MapPage } from './pages/map.js';
+import { Payload } from './pages/payload.js';
 import { AlertBanner, AlertBell, AlertsDrawer, useAlertNotifications } from './alerts.js';
 
 const PAGES = [
@@ -26,6 +27,7 @@ const PAGES = [
   { id: 'hardware', label: 'Hardware', icon: 'chip', comp: Hardware },
   { id: 'ros', label: 'ROS 2', icon: 'ros', comp: Ros },
   { id: 'camera', label: 'Camera', icon: 'camera', comp: Camera },
+  { id: 'payload', label: 'Payload', icon: 'payload', comp: Payload },
   { id: 'data', label: 'Flight data', icon: 'data', comp: Data },
   { id: 'map', label: 'Map', icon: 'map', comp: MapPage },
   { id: 'files', label: 'Files', icon: 'files', comp: Files },

@@ -64,6 +64,7 @@ const P = {
   grid: 'M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 0h7v7h-7z',
   bolt: 'M13 2 4 14h7l-1 8 9-12h-7z',
   map: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zm0 0v14m6-12v14',
+  payload: 'M12 3v6m0 0-3-3m3 3 3-3M5 13h14l-2 8H7zM9 13V11h6v2',
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-14v3m0 14v3M2 12h3m14 0h3',
   zoomin: 'M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm10 3-5.2-5.2M11 8v6M8 11h6',
   zoomout: 'M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14zm10 3-5.2-5.2M8 11h6',
