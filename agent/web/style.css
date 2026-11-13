@@ -91,6 +91,7 @@ select.input { padding-right: 6px; }
 .dot.ok { background: var(--ok); box-shadow: 0 0 6px var(--ok); } .dot.bad { background: var(--bad); box-shadow: 0 0 6px var(--bad); } .dot.warn { background: var(--warn); }
 .badge { background: var(--bad); color: #1b0606; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 0 6px; }
 .banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); margin-bottom: 14px; border: 1px solid #5b2b2b; background: #2a1416; color: #fecaca; }
+.banner.info-b { border-color: #1e3a5f; background: #0e1b2c; color: #bfdbfe; }
 .banner.warn { border-color: #5a4515; background: #2a210c; color: #fde68a; }
 .empty { padding: 30px; text-align: center; color: var(--muted); }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }

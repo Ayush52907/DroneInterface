@@ -32,7 +32,8 @@ META_RE = {
 
 
 def result_files() -> list[dict]:
-    """Result files from the flight data sources that contain coordinates."""
+    """Result files configured in the flight data sources (also when they
+    currently hold no targets: each run rewrites them, often empty at first)."""
     out = []
     for s in flightdata.sources():
         for f in s["files"]:
@@ -42,7 +43,7 @@ def result_files() -> list[dict]:
                 n = len(parse(f)["targets"])
             except Exception:
                 n = 0
-            if n:
+            if True:
                 out.append({"path": f, "name": os.path.basename(f), "source": s["idx"], "source_name": s["name"],
                             "mtime": os.path.getmtime(f), "count": n})
     out.sort(key=lambda f: ("clustered" not in f["name"], f["name"]))
@@ -94,7 +95,7 @@ def parse(path: str) -> dict:
         pending_meta, pending_label = None, ""
     mt = os.path.getmtime(p)
     return {"path": p, "name": os.path.basename(p), "mtime": mt, "own_write": abs(_own_writes.get(p, -1) - mt) < 1e-6, "targets": targets,
-            "notes": notes[:20]}
+            "notes": notes[-20:]}
 
 
 def stat(path: str) -> dict:

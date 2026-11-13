@@ -320,7 +320,7 @@ export function MapPage({ params = {} }) {
     <div class="page-head" style="margin-bottom:10px">
       <h1>Map</h1>
       ${filesList && filesList.length > 1 && html`<select class="input" value=${path} onChange=${e => setPath(e.target.value)}>
-        ${filesList.map(f => html`<option value=${f.path}>${f.name} (${f.count})</option>`)}</select>`}
+        ${filesList.map(f => html`<option value=${f.path} selected=${f.path === path}>${f.name} (${f.count})</option>`)}</select>`}
       ${data && html`<span class="faint" style="font-size:12px">${data.targets.length - nIgn} active${nIgn ? ` · ${nIgn} ignored` : ''} · updated ${fmtAgo(data.mtime)}</span>`}
       <button class="live-toggle ${live ? 'on' : ''}" onClick=${() => setLive(!live)} title=${live ? 'Live: checks for changes every 3 s. Click to pause' : 'Paused. Click to resume live updates'}>
         <span class="dot ${live ? 'ok' : ''}"></span>${live ? 'Live' : 'Paused'}</button>
@@ -331,7 +331,8 @@ export function MapPage({ params = {} }) {
       ${path && html`<a class="btn" href=${'/api/map/kmz?' + qs({ path })} title="All targets as a Google Earth / Mission Planner file"><${Icon} name="download"/><span class="hide-sm">KMZ</span></a>`}
     </div>
     ${writing && html`<div class="banner warn">The targets file is being updated (scout pipeline running?). The map follows it live; ignoring/restoring targets is locked until it has stopped changing for a minute, so your changes aren't overwritten.</div>`}
-    ${filesList && filesList.length === 0 && html`<div class="banner warn">No result files with coordinates. Add one (e.g. ~/targets_clustered.txt) to a data source under Flight data → Configure.</div>`}
+    ${filesList && filesList.length === 0 && html`<div class="banner warn">No results file configured. Add one (e.g. ~/targets_clustered.txt) to a data source under Flight data → Configure.</div>`}
+    ${data && data.targets.length === 0 && html`<div class="banner info-b">${data.name} has no targets right now${data.notes && data.notes.length ? ` (last line: "${data.notes[data.notes.length - 1]}")` : ''}. The map updates by itself when targets are written.</div>`}
     <div class="map-layout">
       <div class="map-wrap">
         <div ref=${el} class="map-el"></div>
