@@ -1,6 +1,8 @@
 # Drone Panel configuration. Restart the service after editing:
 #   sudo systemctl restart drone-panel
 
+name: null               # drone name shown in the browser tab, sidebar and notifications, e.g. RUDRA (null = hostname)
+
 server:
   host: 127.0.0.1        # keep on localhost; Tailscale Serve provides HTTPS access
   port: 8080

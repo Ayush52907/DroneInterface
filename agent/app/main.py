@@ -74,6 +74,7 @@ async def value_handler(request, exc):
 def me(user: dict = Depends(require_user)):
     return {
         "user": user,
+        "name": str(CONFIG.get("name") or collector.info().get("hostname") or "Drone"),
         "system": collector.info(),
         "files": {"roots": files.ROOTS, "bookmarks": CONFIG["files"]["bookmarks"]},
         "self_unit": services.SELF_UNIT,

@@ -44,7 +44,7 @@ function App() {
   const [stats, setStats] = useState(null);
   const [conn, setConn] = useState('connecting');
   const [showAlerts, setShowAlerts] = useState(false);
-  useAlertNotifications(stats && stats.alerts, me && me.system.hostname);
+  useAlertNotifications(stats && stats.alerts, me && me.name);
 
   useEffect(() => {
     const on = () => setRoute(parseHash());
@@ -63,7 +63,7 @@ function App() {
   }, [me]);
 
   useEffect(() => {
-    if (me) document.title = `${me.system.hostname} · Drone Panel`;
+    if (me) document.title = `${me.name} · Drone Panel`;
   }, [me]);
 
   if (err) {
@@ -90,7 +90,7 @@ function App() {
       <aside class="side">
         <div style="position:relative"><img class="brand-logo" src="logo.png" alt="Logo" />
           <div style="position:absolute;right:0;top:0"><${AlertBell} summary=${stats && stats.alerts} onOpen=${() => setShowAlerts(true)} /></div></div>
-        <div class="brand-host"><b class="ellipsis">${me.system.hostname}</b><small class="ellipsis" title=${me.system.model}>${me.system.model}</small></div>
+        <div class="brand-host"><b class="ellipsis">${me.name}</b><small class="ellipsis" title=${me.system.model}>${me.name !== me.system.hostname ? me.system.hostname + ' · ' : ''}${me.system.model}</small></div>
         <nav class="nav">${navItems}</nav>
         <div class="side-foot">
           <div class="row"><span class="dot ${live ? 'ok' : 'bad'}"></span>${live ? 'Live' : 'Reconnecting…'}</div>
@@ -99,7 +99,7 @@ function App() {
       </aside>
       <main class="main">
         <div class="mtop"><img src="logo.png" alt="Logo" /><span class="grow"></span>
-          <span class="mono" style="font-size:13px">${me.system.hostname}</span><span class="dot ${live ? 'ok' : 'bad'}" title=${live ? 'Live' : 'Reconnecting'}></span>
+          <span style="font-size:13px;font-weight:700">${me.name}</span><span class="dot ${live ? 'ok' : 'bad'}" title=${live ? 'Live' : 'Reconnecting'}></span>
           <${AlertBell} summary=${stats && stats.alerts} onOpen=${() => setShowAlerts(true)} /></div>
         ${!live && conn !== 'connecting' && html`<div class="banner warn" style="margin:12px 16px 0;border-radius:8px">Connection to the drone lost. Retrying…</div>`}
         <${AlertBanner} summary=${stats && stats.alerts} onOpen=${() => setShowAlerts(true)} />

@@ -44,6 +44,7 @@ DEFAULTS: dict = {
         "port_conflict": {"enabled": True},
         "gimbal": {"enabled": True, "after_seconds": 10},
     },
+    "name": None,  # drone name for the browser tab / sidebar (None = hostname)
     "state_dir": "~/.local/state/drone-panel",
     "drone_profile": "~/drone.yaml",  # the single drone settings file (FC, mavlink-router, payload, thresholds)
 }
