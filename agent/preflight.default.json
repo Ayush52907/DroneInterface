@@ -12,6 +12,26 @@
     "severity": "critical"
   },
   {
+    "name": "RC link (ELRS)",
+    "type": "rc_link",
+    "severity": "critical"
+  },
+  {
+    "name": "GPS 3D fix",
+    "type": "gps_fix",
+    "severity": "critical"
+  },
+  {
+    "name": "GPS satellites",
+    "type": "gps_sats",
+    "severity": "critical"
+  },
+  {
+    "name": "GPS HDOP",
+    "type": "gps_hdop",
+    "severity": "critical"
+  },
+  {
     "name": "Ethernet link (camera)",
     "type": "link",
     "iface": "enP8p1s0",

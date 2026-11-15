@@ -16,6 +16,7 @@ import { Data } from './pages/data.js';
 import { Actions } from './pages/actions.js';
 import { MapPage } from './pages/map.js';
 import { Payload } from './pages/payload.js';
+import { Settings } from './pages/settings.js';
 import { AlertBanner, AlertBell, AlertsDrawer, useAlertNotifications } from './alerts.js';
 
 const PAGES = [
@@ -32,6 +33,7 @@ const PAGES = [
   { id: 'map', label: 'Map', icon: 'map', comp: MapPage },
   { id: 'files', label: 'Files', icon: 'files', comp: Files },
   { id: 'terminal', label: 'Terminal', icon: 'terminal', comp: Terminal },
+  { id: 'settings', label: 'Drone settings', icon: 'services', comp: Settings },
   { id: 'activity', label: 'Activity', icon: 'activity', comp: Activity },
 ];
 

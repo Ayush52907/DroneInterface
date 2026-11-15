@@ -294,6 +294,9 @@ mark { background: #a16207; color: #fff; border-radius: 2px; }
 .leaflet-control-scale-line { background: rgba(8,11,15,.75); color: #fff; border-color: #fff; }
 .leaflet-bar a { background: var(--panel); color: var(--text); border-color: var(--line); }
 
+/* ---------- drone settings ---------- */
+.settings-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+
 /* ---------- payload ---------- */
 .servo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
 .servo-btn { position: relative; display: grid; gap: 4px; justify-items: center; padding: 16px 10px; border-radius: 12px; border: 2px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font: inherit; }
@@ -382,6 +385,7 @@ mark { background: #a16207; color: #fff; border-radius: 2px; }
   .keybar { display: flex; bottom: -40px; right: 0; }
   .show-sm { display: inline; }
   .newsvc { grid-template-columns: 1fr; }
+  .settings-layout { grid-template-columns: 1fr; }
   .map-page.page-full { height: auto; display: block; }
   .map-layout { display: block; }
   .map-wrap { height: 55vh; min-height: 300px; }

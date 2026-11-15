@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from . import audit, camera, files, flightdata, hardware, logs, preflight, services, terminal
 from .alerts import engine as alerts
 from .gimbal import gimbal
-from . import actions, mapdata, payload
+from . import actions, drone, fclink, mapdata, payload
 from .ros import bridge as ros_bridge
 from .auth import require_user, ws_user
 from .config import CONFIG, WEB_DIR
@@ -24,6 +24,11 @@ from .stats import collector
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     collector.start()
+    try:
+        if drone.load()["mavlink_router"]["enabled"]:
+            fclink.start()
+    except Exception as e:
+        print("drone.yaml:", e)
     bg = [asyncio.create_task(hardware.monitor.run()), asyncio.create_task(terminal.reaper()),
           asyncio.create_task(alerts.run())]
     yield
@@ -520,7 +525,7 @@ def payload_status():
 
 @api.put("/payload")
 def payload_save(user: dict = Depends(require_user), config: dict = Body(..., embed=True)):
-    d = payload.save(config)
+    d = payload.save(config.get("configs") or [])
     audit.record(user, "payload.config", ", ".join(c["name"] for c in d["configs"]))
     return d
 
@@ -539,6 +544,70 @@ async def payload_set(cfg_id: str, user: dict = Depends(require_user), pwm: int 
 @api.post("/payload/read")
 async def payload_read():
     return await payload.read_outputs()
+
+
+# ------------------------------------------------------------------ drone.yaml (single settings file)
+@api.get("/drone")
+def drone_get():
+    info = drone.raw()
+    d = drone.load()
+    return {**info, "router": drone.router_status(), "services": drone.services_using_env(d),
+            "router_conf": drone.router_conf(d), "env_dir": drone.ENV_DIR,
+            "clients": {k: drone.client_url(d, k)[0] for k in d["mavlink_router"]["clients"]}}
+
+
+@api.post("/drone/validate")
+def drone_validate(text: str = Body(..., embed=True)):
+    import yaml as _y
+    try:
+        d = drone.validate(_y.safe_load(text) or {})
+    except _y.YAMLError as e:
+        return {"ok": False, "error": f"YAML syntax error: {e}"}
+    except HTTPException as e:
+        return {"ok": False, "error": e.detail}
+    return {"ok": True, "router_conf": drone.router_conf(d),
+            "clients": {k: drone.client_url(d, k)[0] for k in d["mavlink_router"]["clients"]}}
+
+
+@api.put("/drone")
+async def drone_save(user: dict = Depends(require_user), text: str = Body(..., embed=True), apply: bool = Body(True, embed=True)):
+    previous = drone.raw()["text"]
+    d = drone.save_text(text)
+    audit.record(user, "drone.yaml.save", drone.PATH)
+    log = []
+    if apply:
+        try:
+            log = await asyncio.to_thread(drone.apply, d)
+        except HTTPException as e:
+            # put the previous file back so drone.yaml always matches what is actually running
+            drone.save_text(previous)
+            try:
+                await asyncio.to_thread(drone.apply)
+            except HTTPException:
+                pass
+            audit.record(user, "drone.yaml.apply", "mavlink-router", False, str(e.detail))
+            raise HTTPException(e.status_code, f"Not applied; drone.yaml was put back as it was.\n{e.detail}")
+        audit.record(user, "drone.yaml.apply", "mavlink-router", True, "; ".join(log))
+    return {"ok": True, "log": log}
+
+
+@api.post("/drone/apply")
+async def drone_apply(user: dict = Depends(require_user)):
+    try:
+        log = await asyncio.to_thread(drone.apply)
+    except HTTPException as e:
+        audit.record(user, "drone.yaml.apply", "mavlink-router", False, str(e.detail))
+        raise
+    audit.record(user, "drone.yaml.apply", "mavlink-router", True, "; ".join(log))
+    return {"ok": True, "log": log}
+
+
+@api.get("/fc")
+async def fc_status(fresh: bool = False):
+    try:
+        return await asyncio.to_thread(fclink.snapshot, fresh)
+    except HTTPException as e:
+        return {"mode": fclink.mode(), "connected": False, "error": e.detail}
 
 
 # ------------------------------------------------------------------ alerts

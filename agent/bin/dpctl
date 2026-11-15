@@ -6,7 +6,7 @@
 set -euo pipefail
 PANEL_USER="__USER__"
 die() { echo "dpctl: $*" >&2; exit 2; }
-[[ $# -ge 1 ]] || die "usage: dpctl <action> <unit> | dpctl unit-write|unit-delete <unit> | dpctl owners | dpctl shell"
+[[ $# -ge 1 ]] || die "usage: dpctl <action> <unit> | dpctl unit-write|unit-delete <unit> | dpctl owners | dpctl router-config | dpctl shell"
 cmd=$1; shift
 
 check_unit() {
@@ -60,6 +60,25 @@ case "$cmd" in
       systemctl reset-failed -- "$name" >/dev/null 2>&1 || true
       echo "deleted $target (backup in $backup)"
     fi
+    ;;
+  router-config)
+    # write /etc/mavlink-router/main.conf from stdin; only known sections/keys/values allowed
+    [[ $# -eq 0 ]] || die "router-config takes no arguments"
+    tmp=$(mktemp)
+    head -c 16384 > "$tmp"
+    lineno=0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      lineno=$((lineno+1))
+      [[ -z "$line" || "$line" =~ ^# ]] && continue
+      [[ "$line" =~ ^\[(General|UartEndpoint\ [A-Za-z0-9_-]+|UdpEndpoint\ [A-Za-z0-9_-]+)\]$ ]] && continue
+      [[ "$line" =~ ^(TcpServerPort|ReportStats|MavlinkDialect|Device|Baud|FlowControl|Mode|Address|Port)=[A-Za-z0-9_./:-]+$ ]] && continue
+      rm -f "$tmp"; die "router config line $lineno not allowed: $line"
+    done < "$tmp"
+    grep -q '^\[UartEndpoint ' "$tmp" || { rm -f "$tmp"; die "router config needs a [UartEndpoint] for the FC"; }
+    mkdir -p /etc/mavlink-router
+    install -m 644 -o root -g root "$tmp" /etc/mavlink-router/main.conf
+    rm -f "$tmp"
+    echo "wrote /etc/mavlink-router/main.conf"
     ;;
   owners)
     # read-only: which processes hold serial / video devices open

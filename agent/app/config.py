@@ -45,6 +45,7 @@ DEFAULTS: dict = {
         "gimbal": {"enabled": True, "after_seconds": 10},
     },
     "state_dir": "~/.local/state/drone-panel",
+    "drone_profile": "~/drone.yaml",  # the single drone settings file (FC, mavlink-router, payload, thresholds)
 }
 
 

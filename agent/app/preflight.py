@@ -8,6 +8,8 @@ import shutil
 import time
 import uuid
 
+from fastapi import HTTPException
+
 from . import hardware, services
 from .config import AGENT_DIR, CONFIG
 from .ros import bridge
@@ -32,7 +34,13 @@ TYPES = {
     "temp": ["max_c"],
     "tailscale": [],
     "gimbal": [],
+    "rc_link": [],   # thresholds come from drone.yaml (preflight:)
+    "gps_fix": [],
+    "gps_sats": [],
+    "gps_hdop": [],
 }
+FC_TYPES = {"rc_link", "gps_fix", "gps_sats", "gps_hdop"}
+FIX_NAMES = {0: "no GPS", 1: "no fix", 2: "2D fix", 3: "3D fix", 4: "DGPS", 5: "RTK float", 6: "RTK fixed", 7: "static", 8: "PPP"}
 
 
 def load() -> list[dict]:
@@ -151,6 +159,42 @@ async def _run_check(c: dict, ctx: dict) -> dict:
             p = gimbal.att["pitch"]
             mode = {0: "LOCK", 1: "FOLLOW", 2: "FPV"}.get(gimbal.mode, "?")
             return _res(c, pos, f"pitch {p:.1f}° (target {tgt:g}°), yaw {gimbal.att['yaw']:.1f}°, {mode}")
+        if t in FC_TYPES:
+            fc = ctx.get("fc") or {}
+            thr = ctx.get("thresholds") or {}
+            if fc.get("_error"):
+                return _res(c, None, fc["_error"])
+            if not fc.get("connected"):
+                return _res(c, False, "no heartbeat from the flight controller" + (f" ({fc['error']})" if fc.get("error") else ""))
+            if t == "rc_link":
+                sensor, rc = fc.get("rc_sensor"), fc.get("rc")
+                if sensor is None and rc is None:
+                    return _res(c, None, "FC is not reporting RC status yet")
+                if sensor and not sensor["present"]:
+                    return _res(c, False, "no RC receiver detected by the FC")
+                if sensor and not sensor["healthy"]:
+                    return _res(c, False, "RC failsafe / receiver not healthy (is the ELRS transmitter on and bound?)")
+                q = (rc or {}).get("quality")
+                minq = float(c.get("min_quality", thr.get("rc_min_quality", 70)))
+                if q is None:
+                    return _res(c, True, "RC receiver healthy (link quality not reported)")
+                return _res(c, q >= minq, f"link quality {q}% (min {minq:g}%)" + (f", {rc['channels']} channels" if rc.get("channels") else ""))
+            gps = fc.get("gps")
+            if gps is None:
+                return _res(c, False, "no GPS data from the FC")
+            if t == "gps_fix":
+                need = int(c.get("min_fix", thr.get("gps_min_fix", 3)))
+                return _res(c, gps["fix"] >= need, f"{FIX_NAMES.get(gps['fix'], gps['fix'])} (need {FIX_NAMES.get(need, need)} or better)")
+            if t == "gps_sats":
+                need = int(c.get("min_sats", thr.get("gps_min_sats", 10)))
+                if gps["sats"] is None:
+                    return _res(c, False, "satellite count unknown")
+                return _res(c, gps["sats"] >= need, f"{gps['sats']} satellites (min {need})")
+            if t == "gps_hdop":
+                mx = float(c.get("max_hdop", thr.get("gps_max_hdop", 1.4)))
+                if gps["hdop"] is None:
+                    return _res(c, False, "HDOP unknown (no fix yet?)")
+                return _res(c, gps["hdop"] <= mx, f"HDOP {gps['hdop']} (max {mx:g})")
         if t == "tailscale":
             ts = await tailscale_status()
             return _res(c, bool(ts and ts.get("online")), "connected" if ts and ts.get("online") else "offline")
@@ -217,7 +261,19 @@ async def run(checks: list[dict] | None = None) -> dict:
             except Exception as e:
                 ctx["ros_rates"] = e
 
-    await asyncio.gather(get_services(), get_hw(), get_ros())
+    async def get_fc():
+        if not types & FC_TYPES:
+            return
+        from . import drone, fclink
+        try:
+            ctx["thresholds"] = drone.load()["preflight"]
+            ctx["fc"] = await asyncio.to_thread(fclink.snapshot, True)
+        except HTTPException as e:
+            ctx["fc"] = {"_error": str(e.detail)}
+        except Exception as e:
+            ctx["fc"] = {"_error": f"FC read failed: {e}"}
+
+    await asyncio.gather(get_services(), get_hw(), get_ros(), get_fc())
     results = await asyncio.gather(*(_run_check(c, ctx) for c in checks))
     by = {c["id"]: c for c in checks}
     crit_fail = [r for r in results if r["status"] != "pass" and by[r["id"]]["severity"] == "critical"]

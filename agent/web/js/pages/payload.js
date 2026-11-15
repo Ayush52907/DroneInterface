@@ -2,7 +2,6 @@ import { html, useState, useEffect } from '../../vendor/preact-htm.js';
 import { api } from '../api.js';
 import { Icon, Modal, toast, confirm, fmtAgo } from '../ui.js';
 
-const BAUDS = [57600, 115200, 230400, 460800, 921600];
 const newPos = (name, pwm, kind) => ({ name, pwm, kind });
 
 function Editor({ data, onClose, onSaved }) {
@@ -25,15 +24,7 @@ function Editor({ data, onClose, onSaved }) {
       foot=${html`<button class="btn ghost grow" style="justify-content:flex-start" onClick=${reset}>Reset to defaults</button>
         <button class="btn" onClick=${onClose}>Cancel</button><button class="btn primary" disabled=${busy} onClick=${save}>Save</button>`}>
     <div style="overflow:auto;min-height:0;display:grid;gap:12px;align-content:start">
-      <div class="card" style="padding:12px">
-        <b style="font-size:13px">Flight controller connection</b>
-        <div class="row" style="gap:10px;margin-top:8px;flex-wrap:wrap">
-          <label class="field grow">Serial port<input class="input mono" value=${d.port} onInput=${e => setD(x => ({ ...x, port: e.target.value }))} /></label>
-          <label class="field">Baud<select class="input" value=${String(d.baud)} onChange=${e => setD(x => ({ ...x, baud: +e.target.value }))}>
-            ${BAUDS.map(b => html`<option value=${String(b)} selected=${d.baud === b}>${b}</option>`)}</select></label>
-        </div>
-        <div class="faint" style="font-size:12px;margin-top:6px">drop_drop.py uses /dev/ttyUSB0 at 115200. The port is only opened for a moment per command.</div>
-      </div>
+      <div class="faint" style="font-size:12.5px">Saved in <span class="mono">~/drone.yaml</span> (payload section). The FC port (${data.port} @ ${data.baud}) is set under <a href="#/settings">Drone settings</a>.</div>
       ${d.configs.map((c, i) => html`<div class="card" style="padding:12px" key=${c.id || i}>
         <div class="row" style="gap:8px;flex-wrap:wrap">
           <input class="input grow" style="min-width:180px;font-weight:600" placeholder="Name, e.g. Servo 12 (payloads 1 & 2)" value=${c.name} onInput=${e => setC(i, { name: e.target.value })} />
@@ -113,31 +104,36 @@ export function Payload() {
   useEffect(() => { load(); const t = setInterval(load, 3000); return () => clearInterval(t); }, []);
   const read = async () => {
     setReading(true);
-    try { const r = await api('/payload/read', { method: 'POST', body: {} }); setFc(r.fc); toast(`Read servo outputs from the FC (${r.ms} ms)`, 'ok'); load(); }
+    try { const r = await api('/payload/read', { method: 'POST', body: {} }); setFc(r.fc); toast('Read servo outputs from the FC', 'ok'); load(); }
     catch (e) { toast(e.message, 'bad'); }
     setReading(false);
   };
   if (!data) return html`<div class="page"><div class="empty"><span class="spinner"></span></div></div>`;
-  const ps = data.port_status;
+  const lk = data.link;
+  const router = lk.mode === 'router';
+  const blocked = router ? !lk.connected : (!lk.present || lk.busy);
+  const armed = router ? lk.armed : fc && fc.armed;
+  const pillCls = router ? (lk.connected ? 'ok' : 'bad') : (!lk.present ? 'bad' : lk.busy ? 'warn' : 'ok');
+  const pillText = router ? (lk.connected ? 'via mavlink-router · FC connected' : 'via mavlink-router · no FC heartbeat')
+    : !lk.present ? `${lk.port} not found` : lk.busy ? `FC port in use by ${lk.owners.join(', ')}` : `direct · FC port ${lk.port} free`;
   return html`<div class="page" style="max-width:1100px">
     <div class="page-head">
       <h1>Payload</h1>
-      <span class="pill ${!ps.present ? 'bad' : ps.busy ? 'warn' : 'ok'}" title=${ps.port}>
-        <span class="dot ${!ps.present ? 'bad' : ps.busy ? 'warn' : 'ok'}"></span>
-        ${!ps.present ? `${ps.port} not found` : ps.busy ? `FC port in use by ${ps.owners.join(', ')}` : `FC port ${ps.port} free`}</span>
-      ${fc && html`<span class="pill ${fc.armed ? 'bad' : ''}">${fc.armed ? 'FC ARMED' : 'FC disarmed'}</span>`}
+      <span class="pill ${pillCls}" title=${data.port}><span class="dot ${pillCls}"></span>${pillText}</span>
+      ${armed !== undefined && armed !== null && html`<span class="pill ${armed ? 'bad' : ''}">${armed ? 'FC ARMED' : 'FC disarmed'}</span>`}
       <span class="grow"></span>
-      <button class="btn" disabled=${reading || !ps.present || ps.busy} onClick=${read} title="Connect briefly and read the FC's current servo outputs (moves nothing)">
+      <button class="btn" disabled=${reading || blocked} onClick=${read} title="Connect briefly and read the FC's current servo outputs (moves nothing)">
         ${reading ? html`<span class="spinner"></span>` : html`<${Icon} name="refresh"/>`}Read outputs</button>
       <button class="btn" onClick=${() => setEdit(true)}><${Icon} name="edit"/>Configure</button>
     </div>
-    ${ps.present && ps.busy && html`<div class="banner warn">${ps.port} is open in ${ps.owners.join(', ')}. The panel won't send servo commands while another program uses the FC link, so its MAVLink stream isn't corrupted. Stop it first if you need manual control.</div>`}
-    ${fc && fc.armed && html`<div class="banner">The flight controller reports it is ARMED.</div>`}
+    ${!router && lk.present && lk.busy && html`<div class="banner warn">${lk.port} is open in ${lk.owners.join(', ')}. Without mavlink-router only one program can use the FC port, so the panel won't send servo commands now (it would corrupt that program's link). Enable mavlink-router under <a href="#/settings">Drone settings</a> to share the FC.</div>`}
+    ${router && !lk.connected && html`<div class="banner warn">No heartbeat from the flight controller through mavlink-router${lk.error ? ` (${lk.error})` : ''}. Is the FC powered and mavlink-router running? See <a href="#/settings">Drone settings</a>.</div>`}
+    ${armed && html`<div class="banner">The flight controller reports it is ARMED.</div>`}
     <div class="grid" style="gap:14px">
       ${data.configs.map(c => html`<${ServoCard} key=${c.id} c=${c} data=${data} onDone=${load} />`)}
       ${data.configs.length === 0 && html`<div class="empty">No configurations. Press Configure to add one.</div>`}
     </div>
-    <div class="faint" style="font-size:12px;margin-top:12px">Each press opens ${data.port} for about a second, sends MAVLink DO_SET_SERVO to the flight controller, waits for its acknowledgement and reads the servo output back. Every command is recorded in Activity.</div>
+    <div class="faint" style="font-size:12px;margin-top:12px">${router ? 'Each press sends MAVLink DO_SET_SERVO through mavlink-router (works while other programs use the FC)' : `Each press opens ${data.port} for about a second, sends MAVLink DO_SET_SERVO`} to the flight controller, waits for its acknowledgement and reads the servo output back. Every command is recorded in Activity.</div>
     ${edit && html`<${Editor} data=${data} onClose=${() => setEdit(false)} onSaved=${load} />`}
   </div>`;
 }

@@ -16,6 +16,10 @@ export const TYPE_INFO = {
   disk: { label: 'Free disk space', fields: [['path', 'Mount', '/'], ['min_gb', 'Minimum GB free', '5', 'number']] },
   temp: { label: 'Temperature below', fields: [['max_c', 'Max °C', '85', 'number']] },
   tailscale: { label: 'Tailscale connected', fields: [] },
+  rc_link: { label: 'RC link (ELRS) healthy', fields: [] },
+  gps_fix: { label: 'GPS fix (3D or better)', fields: [] },
+  gps_sats: { label: 'GPS satellite count', fields: [] },
+  gps_hdop: { label: 'GPS HDOP', fields: [] },
 };
 
 const summary = (c) => (TYPE_INFO[c.type]?.fields || []).map(([k]) => c[k]).filter(v => v !== undefined && v !== '').join(' · ');
