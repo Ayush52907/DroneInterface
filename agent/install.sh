@@ -118,6 +118,21 @@ EOF
   c_ok "mavlink-router: restarts until the FC port is available"
 fi
 
+# ---------------------------------------------------------------- power monitor (JetPack 5)
+# The INA3221 power sensor's readings are root-only on JetPack 5 (world-readable on JetPack 6+).
+# Make the voltage/current values readable so the dashboard can show power (read-only numbers).
+RULE=/etc/udev/rules.d/90-drone-panel-power.rules
+INA=""
+for h in /sys/class/hwmon/hwmon*; do [[ "$(cat "$h/name" 2>/dev/null)" == ina3221* ]] && INA="$h" && break; done
+if [[ -n "$INA" ]] && ! sudo -u "$RUN_USER" cat "$INA/in1_input" >/dev/null 2>&1; then
+  cat > "$RULE" <<'EOF'
+# Drone Panel: let the dashboard read the INA3221 power monitor (root-only on JetPack 5)
+SUBSYSTEM=="hwmon", ATTR{name}=="ina3221*", RUN+="/bin/sh -c 'chmod a+r /sys%p/in*_input /sys%p/in*_label /sys%p/curr*_input'"
+EOF
+  chmod a+r "$INA"/in*_input "$INA"/in*_label "$INA"/curr*_input 2>/dev/null || true   # now; the rule covers reboots
+  c_ok "Power monitor readable by $RUN_USER ($RULE)"
+fi
+
 # ---------------------------------------------------------------- systemd
 sed "s/__USER__/$RUN_USER/g" "$SRC/drone-panel.service" > /etc/systemd/system/drone-panel.service
 systemctl daemon-reload

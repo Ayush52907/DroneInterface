@@ -6,6 +6,7 @@ set -euo pipefail
 PORT=$(grep -E '^\s*port:' /etc/drone-panel/config.yaml 2>/dev/null | head -1 | grep -oE '[0-9]+' || echo 8080)
 systemctl disable --now drone-panel.service 2>/dev/null || true
 rm -f /etc/systemd/system/drone-panel.service /etc/polkit-1/rules.d/50-drone-panel.rules /etc/sudoers.d/drone-panel
+rm -f /etc/udev/rules.d/90-drone-panel-power.rules /etc/systemd/system/mavlink-router.service.d/drone-panel.conf
 systemctl daemon-reload
 if command -v tailscale >/dev/null; then
   tailscale serve --https=443 off 2>/dev/null || tailscale serve --http=80 off 2>/dev/null || true
