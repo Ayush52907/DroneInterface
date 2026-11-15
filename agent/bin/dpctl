@@ -71,7 +71,7 @@ case "$cmd" in
       lineno=$((lineno+1))
       [[ -z "$line" || "$line" =~ ^# ]] && continue
       [[ "$line" =~ ^\[(General|UartEndpoint\ [A-Za-z0-9_-]+|UdpEndpoint\ [A-Za-z0-9_-]+)\]$ ]] && continue
-      [[ "$line" =~ ^(TcpServerPort|ReportStats|MavlinkDialect|Device|Baud|FlowControl|Mode|Address|Port)=[A-Za-z0-9_./:-]+$ ]] && continue
+      [[ "$line" =~ ^(TcpServerPort|ReportStats|MavlinkDialect|SnifferSysid|Device|Baud|FlowControl|Mode|Address|Port)=[A-Za-z0-9_./:-]+$ ]] && continue
       rm -f "$tmp"; die "router config line $lineno not allowed: $line"
     done < "$tmp"
     grep -q '^\[UartEndpoint ' "$tmp" || { rm -f "$tmp"; die "router config needs a [UartEndpoint] for the FC"; }

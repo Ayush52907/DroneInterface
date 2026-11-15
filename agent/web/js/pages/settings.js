@@ -16,6 +16,7 @@ function FcCard() {
       : html`<div class="kv">
         <span>Link</span><span class=${fc.connected ? 'ok' : 'bad'}>${fc.connected ? `connected (heartbeat ${fc.age}s ago)` : 'no heartbeat' + (fc.error ? ` (${fc.error})` : '')}</span>
         ${fc.connected && html`<span>Armed</span><span class=${fc.armed ? 'bad' : ''}>${fc.armed ? 'ARMED' : 'disarmed'}</span>`}
+        ${fc.connected && fc.link && html`<span>Link quality</span><span class=${fc.link.loss_pct > 2 ? 'bad' : ''}>${fc.link.msgs_per_s} msg/s · ${fc.link.loss_pct}% lost (last ${fc.link.window_s}s)</span>`}
         <span>GPS</span><span>${g ? `${FIX[g.fix] || g.fix} · ${g.sats ?? '?'} sats · HDOP ${g.hdop ?? '?'}` : '–'}</span>
         <span>RC</span><span>${rs ? (rs.healthy ? 'receiver healthy' : rs.present ? 'failsafe / unhealthy' : 'no receiver') : '–'}${rc && rc.quality != null ? ` · ${rc.quality}%` : ''}</span>
       </div>`}

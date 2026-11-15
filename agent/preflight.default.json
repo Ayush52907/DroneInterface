@@ -12,6 +12,11 @@
     "severity": "critical"
   },
   {
+    "name": "FC ↔ OBC link (both directions)",
+    "type": "fc_link",
+    "severity": "critical"
+  },
+  {
     "name": "RC link (ELRS)",
     "type": "rc_link",
     "severity": "critical"

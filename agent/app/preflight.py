@@ -38,6 +38,7 @@ TYPES = {
     "gps_fix": [],
     "gps_sats": [],
     "gps_hdop": [],
+    "fc_link": [],   # FC <-> OBC both directions; loss limit from drone.yaml (preflight.link_max_loss)
 }
 FC_TYPES = {"rc_link", "gps_fix", "gps_sats", "gps_hdop"}
 FIX_NAMES = {0: "no GPS", 1: "no fix", 2: "2D fix", 3: "3D fix", 4: "DGPS", 5: "RTK float", 6: "RTK fixed", 7: "static", 8: "PPP"}
@@ -161,6 +162,29 @@ async def _run_check(c: dict, ctx: dict) -> dict:
             p = gimbal.att["pitch"]
             mode = {0: "LOCK", 1: "FOLLOW", 2: "FPV"}.get(gimbal.mode, "?")
             return _res(c, pos, f"pitch {p:.1f}° (target {tgt:g}°), yaw {gimbal.att['yaw']:.1f}°, {mode}")
+        if t == "fc_link":
+            lk = ctx.get("fc_link") or {}
+            if lk.get("_error"):
+                return _res(c, None, lk["_error"])
+            rx, tx = lk.get("rx") or {}, lk.get("tx") or {}
+            if not rx.get("ok"):
+                return _res(c, False, "FC → OBC broken: nothing received from the flight controller"
+                                      + (f" ({rx['error']})" if rx.get("error") else "")
+                                      + ". Check FC power, the FC TX → Jetson RX wire, port and baud")
+            if not tx.get("ok"):
+                return _res(c, False, "FC → OBC works, but OBC → FC is BROKEN: the FC doesn't answer requests"
+                                      f" ({tx.get('error')}). Check the Jetson TX → FC RX wire")
+            parts = []
+            loss, maxloss = rx.get("loss_pct"), float(c.get("max_loss", (ctx.get("thresholds") or {}).get("link_max_loss", 2)))
+            rate = f"{rx['msgs_per_s']:g} msg/s, {loss:g}% loss" if loss is not None else "link quality: measuring…"
+            parts.append(f"FC → OBC ok ({rate})")
+            parts.append(f"OBC → FC ok (FC answered in {tx['rtt_ms']} ms)")
+            if lk.get("clients") is not None:
+                run = [x["name"] for x in lk["clients"] if x["running"]]
+                parts.append("on mavlink-router: " + (", ".join(run) if run else "no scripts running"))
+            if loss is not None and loss > maxloss:
+                return _res(c, False, f"{loss:g}% of FC packets lost (max {maxloss:g}%), check wiring and baud · " + " · ".join(parts))
+            return _res(c, True, " · ".join(parts))
         if t in FC_TYPES:
             fc = ctx.get("fc") or {}
             thr = ctx.get("thresholds") or {}
@@ -279,18 +303,46 @@ async def run(checks: list[dict] | None = None) -> dict:
                 ctx["ros_rates"] = e
 
     async def get_fc():
-        if not types & FC_TYPES:
+        if not types & (FC_TYPES | {"fc_link"}):
             return
         from . import drone, fclink
         try:
             ctx["thresholds"] = drone.load()["preflight"]
+        except Exception:
+            ctx["thresholds"] = {}
+        if "fc_link" in types:
+            try:
+                ctx["fc_link"] = await asyncio.to_thread(fclink.link_check)
+                snap = ctx["fc_link"].pop("snapshot", None)
+                if snap is not None:  # direct mode: reuse this port session for the RC/GPS checks
+                    ctx["fc"] = {"mode": "direct", **snap}
+                elif ctx["fc_link"].get("mode") == "direct" and not ctx["fc_link"]["rx"].get("ok"):
+                    ctx["fc"] = {"connected": False, "error": ctx["fc_link"]["rx"].get("error")}
+            except HTTPException as e:
+                ctx["fc_link"] = {"_error": str(e.detail)}
+            except Exception as e:
+                ctx["fc_link"] = {"_error": f"FC link check failed: {e}"}
+        if not types & FC_TYPES or "fc" in ctx:
+            return
+        try:
             ctx["fc"] = await asyncio.to_thread(fclink.snapshot, True)
         except HTTPException as e:
             ctx["fc"] = {"_error": str(e.detail)}
         except Exception as e:
             ctx["fc"] = {"_error": f"FC read failed: {e}"}
 
-    await asyncio.gather(get_services(), get_hw(), get_ros(), get_fc())
+    try:
+        from . import drone
+        router = drone.load()["mavlink_router"]["enabled"]
+    except Exception:
+        router = False
+    if router:
+        # quick (~10 ms) but timing-sensitive: measure the FC round trip before the
+        # CPU-heavy checks (process/fd scan) start competing with the MAVLink reader thread
+        await get_fc()
+        await asyncio.gather(get_services(), get_hw(), get_ros())
+    else:  # direct mode holds the FC port for ~4 s: run it alongside the rest
+        await asyncio.gather(get_services(), get_hw(), get_ros(), get_fc())
     results = await asyncio.gather(*(_run_check(c, ctx) for c in checks))
     by = {c["id"]: c for c in checks}
     crit_fail = [r for r in results if r["status"] != "pass" and by[r["id"]]["severity"] == "critical"]
