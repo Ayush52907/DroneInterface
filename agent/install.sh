@@ -20,14 +20,21 @@ id "$RUN_USER" >/dev/null || { c_err "User $RUN_USER not found"; exit 1; }
 echo "Installing Drone Panel to run as user: $RUN_USER"
 
 # ---------------------------------------------------------------- packages
-PYV=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+# newest Python >= 3.9 (e.g. 3.12 on JetPack 6/7; 3.9 on JetPack 5, where python3 is 3.8)
+PY=""
+for c in python3.13 python3.12 python3.11 python3.10 python3.9 python3; do
+  command -v "$c" >/dev/null || continue
+  if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null; then PY=$(command -v "$c"); break; fi
+done
+[[ -n "$PY" ]] || { c_err "Python 3.9 or newer is required (python3 is $(python3 --version 2>&1)); install e.g. python3.9"; exit 1; }
+PYV=$("$PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
 TMPV=$(mktemp -d)
-if ! python3 -m venv "$TMPV/v" >/dev/null 2>&1; then
-  echo "Installing python3-venv…"
+if ! "$PY" -m venv "$TMPV/v" >/dev/null 2>&1; then
+  echo "Installing python${PYV}-venv…"
   apt-get update -qq && apt-get install -y -qq "python${PYV}-venv" || apt-get install -y -qq python3-venv
 fi
 rm -rf "$TMPV"
-c_ok "Python $PYV with venv"
+c_ok "Python $PYV ($PY) with venv"
 
 # ---------------------------------------------------------------- code + venv
 mkdir -p "$DEST"
@@ -36,11 +43,18 @@ rm -rf "$DEST/bin"
 cp -r "$SRC/app" "$SRC/web" "$SRC/bin" "$SRC/requirements.txt" "$SRC/preflight.default.json" "$SRC/actions.default.json" "$DEST/"
 sed -i "s/__USER__/$RUN_USER/g" "$DEST/bin/dpctl"
 find "$DEST" -name __pycache__ -type d -prune -exec rm -rf {} +
+if [[ -x "$DEST/.venv/bin/python" ]] && [[ "$("$DEST/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" != "$PYV" ]]; then
+  rm -rf "$DEST/.venv"   # made with another Python version: rebuild
+fi
 if [[ ! -x "$DEST/.venv/bin/python" ]]; then
-  python3 -m venv "$DEST/.venv"
+  "$PY" -m venv "$DEST/.venv"
 fi
 "$DEST/.venv/bin/pip" install -q --upgrade pip
-"$DEST/.venv/bin/pip" install -q -r "$DEST/requirements.txt"
+if ! "$DEST/.venv/bin/pip" install -q -r "$DEST/requirements.txt"; then
+  echo "Some packages need compiling: installing python${PYV}-dev and build tools…"
+  apt-get update -qq && apt-get install -y -qq "python${PYV}-dev" build-essential
+  "$DEST/.venv/bin/pip" install -q -r "$DEST/requirements.txt"
+fi
 chown -R root:root "$DEST"
 chmod -R go-w "$DEST"
 chmod 755 "$DEST/bin/dpctl"

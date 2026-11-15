@@ -4,6 +4,7 @@ Protocol: one JSON request per line on stdin {"id", "cmd", "args"},
 one JSON reply per line on stdout {"id", "ok", "result" | "error"}.
 Standalone on purpose: must not import anything from the panel.
 """
+from __future__ import annotations  # keep annotations unevaluated (Python 3.9: no X | None)
 import json
 import os
 import sys

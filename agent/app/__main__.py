@@ -5,6 +5,7 @@ optionally, directly on this machine's Tailscale IP (plain HTTP inside the
 encrypted Tailscale tunnel). The direct listener is what users the machine is
 *shared* with use, since Tailscale Serve isn't reachable for them.
 """
+from __future__ import annotations  # keep annotations unevaluated (Python 3.9: no X | None)
 import asyncio
 import contextlib
 import subprocess

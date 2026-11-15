@@ -78,7 +78,7 @@ software.
                                               └── optional ground stations
 ```
 
-- **Backend:** Python 3.10+ with FastAPI and uvicorn, running as a systemd service with CPU, memory and IO limits.
+- **Backend:** Python 3.9+ with FastAPI and uvicorn, running as a systemd service with CPU, memory and IO limits.
 - **Frontend:** Preact + htm with all assets vendored, so there's no build step and no CDN; the UI works offline on the tailnet.
 - **State:** the panel config is in `/etc/drone-panel/config.yaml`, drone settings in `~/drone.yaml`, and runtime state (checklists, quick actions, alerts, audit log) in `~/.local/state/drone-panel/`.
 
@@ -88,8 +88,8 @@ software.
 
 | | |
 |---|---|
-| Hardware | NVIDIA Jetson. Developed and tested on an Orin Nano (JetPack 7, Ubuntu 24.04, Python 3.12). |
-| Python | 3.10 or newer, with `venv` |
+| Hardware | NVIDIA Jetson. Tested on an Orin Nano (JetPack 7, Ubuntu 24.04, Python 3.12) and a Xavier NX (JetPack 5, Ubuntu 20.04, Python 3.9). |
+| Python | 3.9 or newer; the installer picks the newest available and installs its `venv` package |
 | Network | [Tailscale](https://tailscale.com) on the Jetson and on every viewing device, with **HTTPS Certificates** enabled in the tailnet's DNS settings |
 | Access | SSH key access from the laptop to the Jetson, and `sudo` on the Jetson for installation |
 | Optional | GStreamer (camera preview and capture), ROS 2 (ROS page), mavlink-router (FC sharing), pymavlink-compatible flight controller (ArduPilot tested) |

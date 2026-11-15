@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Optional  # route parameters: FastAPI evaluates them at runtime (Python 3.9)
 import json
 import os
 import time
@@ -216,7 +217,7 @@ def _log_params(units: str, kernel: bool, priority: int | None, lines: int, sinc
 
 
 @app.websocket("/ws/logs")
-async def ws_logs(ws: WebSocket, units: str = "", kernel: bool = False, priority: int | None = None,
+async def ws_logs(ws: WebSocket, units: str = "", kernel: bool = False, priority: Optional[int] = None,
                   lines: int = 300, since: str = ""):
     if not await ws_user(ws):
         return
@@ -234,7 +235,7 @@ async def ws_logs(ws: WebSocket, units: str = "", kernel: bool = False, priority
 
 
 @api.get("/logs/download")
-async def logs_download(units: str = "", kernel: bool = False, priority: int | None = None,
+async def logs_download(units: str = "", kernel: bool = False, priority: Optional[int] = None,
                         lines: int = 20000, since: str = ""):
     cmd = logs.build_cmd(*_log_params(units, kernel, priority, lines, since), follow=False, fmt="short-iso")
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
@@ -285,7 +286,7 @@ def files_download(path: str, user: dict = Depends(require_user)):
 
 @api.post("/files/write")
 def files_write(user: dict = Depends(require_user), path: str = Body(...), content: str = Body(...),
-                mtime: float | None = Body(None)):
+                mtime: Optional[float] = Body(None)):
     e = files.write_text(path, content, mtime)
     audit.record(user, "file.write", path, True, f"{len(content)} chars")
     return e
@@ -683,7 +684,7 @@ def map_targets(path: str):
 
 @api.post("/map/ignore")
 def map_ignore(user: dict = Depends(require_user), path: str = Body(...), id: str = Body(...), lat: float = Body(...),
-               lon: float = Body(...), ignored: bool = Body(...), mtime: float | None = Body(None)):
+               lon: float = Body(...), ignored: bool = Body(...), mtime: Optional[float] = Body(None)):
     d = mapdata.set_ignored(path, id, lat, lon, ignored, mtime)
     audit.record(user, "target.ignore" if ignored else "target.restore", f"{os.path.basename(path)} #{id}", True,
                  f"{lat:.7f}, {lon:.7f}")
