@@ -46,6 +46,7 @@ DEFAULT = {
             {"name": "High (release payload 4)", "pwm": 1900, "kind": "release"}]},
     ],
     "preflight": {"rc_min_quality": 70, "gps_min_fix": 3, "gps_min_sats": 10, "gps_max_hdop": 1.4, "link_max_loss": 2.0},
+    "capture": {"folder": "~/camera_captures", "min_free_gb": 2.0},
 }
 BAUDS = (9600, 19200, 38400, 57600, 115200, 230400, 460800, 500000, 921600, 1500000)
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
@@ -136,6 +137,15 @@ def validate(d: dict) -> dict:
                             "link_max_loss": max(0.0, min(100.0, float(pf["link_max_loss"])))}
     except (TypeError, ValueError, KeyError):
         raise HTTPException(400, "preflight thresholds must be numbers")
+
+    cap = {**out["capture"], **(d.get("capture") or {})}
+    folder = str(cap.get("folder") or "").strip()
+    if not re.fullmatch(r"(~|/)[A-Za-z0-9_./ -]*", folder) or ".." in folder.split("/"):
+        raise HTTPException(400, f"capture.folder must be a path like ~/camera_captures (got {folder!r})")
+    try:
+        out["capture"] = {"folder": folder, "min_free_gb": max(0.5, min(500.0, float(cap["min_free_gb"])))}
+    except (TypeError, ValueError):
+        raise HTTPException(400, "capture.min_free_gb must be a number")
     return out
 
 
@@ -172,6 +182,11 @@ preflight:
   gps_min_sats: {d['preflight']['gps_min_sats']}
   gps_max_hdop: {d['preflight']['gps_max_hdop']}
   link_max_loss: {d['preflight']['link_max_loss']}   # % lost FC packets allowed by the FC <-> OBC link check
+
+# Camera page Photo / Record: saved on the Jetson (photos/ and videos/ inside this folder)
+capture:
+  folder: {d['capture']['folder']}
+  min_free_gb: {d['capture']['min_free_gb']}   # GB free needed to start recording; it stops by itself below half of this
 """
 
 

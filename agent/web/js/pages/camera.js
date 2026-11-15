@@ -1,6 +1,7 @@
 import { html, useState, useEffect, useRef } from '../../vendor/preact-htm.js';
 import { api, qs } from '../api.js';
-import { Icon, toast } from '../ui.js';
+import { go } from '../ctx.js';
+import { Icon, toast, fmtBytes, fmtAgo } from '../ui.js';
 
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
 const LABEL = { low: 'Low · 480p · 5 fps · ~0.6 Mbit/s', medium: 'Medium · 640p · 10 fps · ~2 Mbit/s', high: 'High · 720p · 15 fps · ~7 Mbit/s' };
@@ -85,6 +86,50 @@ function Preview({ cam, maxMin, autostart }) {
       <span class="grow"></span>
       <span class="faint" style="font-size:12px">${status.hw ? 'Hardware decoding on Jetson · ' : ''}${status.width}×${status.height}</span>
     </div>
+    <${Captures} idx=${cam.idx} />
+  </div>`;
+}
+
+function Captures({ idx }) {
+  const [c, setC] = useState(null);
+  const [busy, setBusy] = useState('');
+  const load = () => api('/capture').then(setC).catch(() => {});
+  const rec = c && c.recording[String(idx)];
+  useEffect(() => { load(); const t = setInterval(load, rec ? 1000 : 5000); return () => clearInterval(t); }, [!!rec]);
+  const photo = async () => {
+    setBusy('photo');
+    try { const r = await api('/capture/photo', { body: { idx } }); setC(r.status); toast(`Photo saved: ${r.name}`, 'ok'); }
+    catch (e) { toast(e.message, 'bad'); }
+    setBusy('');
+  };
+  const record = async () => {
+    setBusy('record');
+    try { const r = await api('/capture/record', { body: { idx, action: rec ? 'stop' : 'start' } }); setC(r.status); toast(rec ? `Saved ${r.name} (${fmtBytes(r.size)})` : 'Recording on the Jetson', 'ok'); }
+    catch (e) { toast(e.message, 'bad'); }
+    setBusy('');
+  };
+  if (!c) return null;
+  const ended = c.last_stopped[String(idx)];
+  const home = (p) => p.replace(/^\/home\/[^/]+/, '~');
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  return html`<div class="capture">
+    <div class="row" style="flex-wrap:wrap;gap:8px">
+      <button class="btn" disabled=${!!busy} onClick=${photo} title="Save a full-resolution photo on the Jetson">
+        ${busy === 'photo' ? html`<span class="spinner"></span>` : html`<${Icon} name="camera"/>`}Photo</button>
+      <button class="btn ${rec ? 'danger' : ''}" disabled=${busy === 'record'} onClick=${record} title=${rec ? 'Stop and save the video' : 'Record the camera stream on the Jetson'}>
+        ${busy === 'record' ? html`<span class="spinner"></span>` : html`<${Icon} name=${rec ? 'stop' : 'record'}/>`}${rec ? 'Stop recording' : 'Record'}</button>
+      ${rec && html`<span class="pill bad" style="background:#b91c1c;color:#fff;border-color:#b91c1c">● REC ${mmss(rec.seconds)}</span><span class="pill">${fmtBytes(rec.size)}</span>`}
+      <span class="grow"></span>
+      <a class="faint mono" style="font-size:12px;cursor:pointer" title="Open in Files" onClick=${() => go('files', { path: c.folder })}>${home(c.folder)}</a>
+      <span class="faint" style="font-size:12px">· ${c.free_gb} GB free</span>
+    </div>
+    ${ended && ended.reason !== 'stopped' && !rec && html`<div class="banner warn" style="margin:8px 0 0">${ended.name}: ${ended.reason}</div>`}
+    ${c.recent.length > 0 && html`<div class="capture-list">
+      ${c.recent.slice(0, 6).map(f => html`<a class="capture-item" key=${f.path} href=${'/api/files/download?' + qs({ path: f.path })} title=${'Download ' + f.name}>
+        ${f.kind === 'photo' ? html`<img loading="lazy" src=${'/api/files/thumb?' + qs({ path: f.path, w: 160 })} alt="" />` : html`<span class="capture-vid"><${Icon} name="record"/></span>`}
+        <span class="ellipsis" style="font-size:11.5px">${f.recording ? '● recording…' : f.name.replace(/^(photo|video)_/, '')}</span>
+        <span class="faint" style="font-size:11px">${fmtBytes(f.size)} · ${fmtAgo(f.mtime)}</span></a>`)}
+    </div>`}
   </div>`;
 }
 
@@ -123,9 +168,6 @@ function GimbalPanel() {
       <span class="pill ${svcOk ? 'ok' : 'bad'}" title="This service holds the flight position">${g.service.name.replace('.service', '')}: ${g.service.active}</span>
       ${g.mode && html`<span class="pill ${g.mode === 'FOLLOW' ? 'info' : 'warn'}">${g.mode} mode</span>`}
       ${g.manual && !g.manual_ready && g.online && html`<span class="pill warn"><span class="spinner" style="width:10px;height:10px"></span>switching to manual… (2–3 s)</span>`}
-      ${g.recording && html`<span class="pill bad">● REC</span>`}
-      ${g.sd_card === 'missing' && html`<span class="pill warn" title="Photos and video are saved on the camera's SD card">no SD card in camera</span>`}
-      ${g.sd_card === 'error' && html`<span class="pill bad">camera SD card error</span>`}
       <span class="grow"></span>
       ${a && html`<span class="mono num" style="font-size:13px">pitch <b>${a.pitch.toFixed(1)}°</b> · yaw ${a.yaw.toFixed(1)}° · roll ${a.roll.toFixed(1)}°</span>`}
     </div>
@@ -138,7 +180,7 @@ function GimbalPanel() {
       <button class="btn primary" style="padding:12px 18px;font-size:15px" disabled=${!!busy || !!g.busy} onClick=${flight}>
         ${busy === 'flight' || g.busy ? html`<span class="spinner"></span>` : html`<${Icon} name="target"/>`}Flight position (${g.target_pitch}°)</button>
     </div>
-    ${(g.manual || g.mode === 'LOCK') && g.online && html`<div class="banner warn" style="margin:10px 0 0">Manual control: ${g.service.name.replace('.service', '')} is paused (gimbal in ${g.mode} mode). Press <b>Flight position</b> before flying.</div>`}
+    ${(g.manual || g.mode === 'LOCK') && g.online && html`<div class="banner warn" style="margin:10px 0 0">Manual control: ${g.service.name.replace('.service', '')} is paused (gimbal in ${g.mode} mode)${g.hold ? html`, panel is holding <b>yaw ${g.hold.yaw}°, pitch ${g.hold.pitch}°</b>${g.hold.corrections ? ` (${g.hold.corrections} drift correction${g.hold.corrections > 1 ? 's' : ''})` : ''}` : ''}. Press <b>Flight position</b> before flying.</div>`}
     ${steps && steps.length > 0 && html`<pre class="pre" style="margin-top:8px;max-height:120px;font-size:11.5px">${steps.join('\n')}</pre>`}
 
     <details class="manual" style="margin-top:12px">
@@ -157,11 +199,7 @@ function GimbalPanel() {
             <${HoldButton} title="Zoom in (hold)" onStart=${() => cmd('zoom_in')} onStop=${() => cmd('zoom_stop')}><${Icon} name="zoomin"/>Zoom<//>
             <${HoldButton} title="Zoom out (hold)" onStart=${() => cmd('zoom_out')} onStop=${() => cmd('zoom_stop')}><${Icon} name="zoomout"/>Zoom<//>
           </div>
-          <div class="row" style="gap:6px;flex-wrap:wrap">
-            <button class="btn" disabled=${g.sd_card && g.sd_card !== 'ok'} title=${g.sd_card === 'ok' ? '' : 'Insert an SD card in the camera'} onClick=${() => cmd('photo')}><${Icon} name="camera"/>Photo</button>
-            <button class="btn ${g.recording ? 'danger' : ''}" disabled=${g.sd_card && g.sd_card !== 'ok' && !g.recording} title=${g.sd_card === 'ok' ? '' : 'Insert an SD card in the camera'} onClick=${() => cmd('record')}><${Icon} name="record"/>${g.recording ? 'Stop recording' : 'Record'}</button>
-          </div>
-          <div class="faint" style="font-size:12px">Hold an arrow to move. The first press switches the gimbal to LOCK mode and waits for siyi-pitch to pause (2–3 s); after that the arrows respond immediately. Flight position hands control back to siyi-pitch. Photos and video are saved on the camera's SD card${g.sd_card === 'missing' ? ', and there is none in the camera right now' : ''}.</div>
+          <div class="faint" style="font-size:12px">Hold an arrow to move. The first press switches the gimbal to LOCK mode and waits for siyi-pitch to pause (2–3 s); after that the arrows respond immediately. When you let go (or press ⊙ Center) the panel keeps the gimbal at that position and corrects the slow yaw drift of LOCK mode. Flight position hands control back to siyi-pitch.</div>
         </div>
       </div>
     </details>

@@ -5,6 +5,11 @@ Cooperates with the siyi-pitch service instead of fighting it:
     while the gimbal is in FOLLOW mode, and pauses itself in other modes.
   * Manual control here first switches the gimbal to LOCK mode, so
     siyi-pitch pauses and manual moves stick.
+  * In LOCK mode the gimbal holds its heading with its own gyro only (no
+    compass), so yaw slowly drifts. While in manual control the panel
+    therefore holds the position you left it at: it remembers yaw/pitch
+    when you release an arrow (or press Center) and sends an absolute-angle
+    command whenever the gimbal has moved more than ~1 deg away.
   * "Flight position" switches back to FOLLOW mode, so siyi-pitch itself
     returns the gimbal to its target. If siyi-pitch isn't running it is
     restarted, and the result is verified from the gimbal's reported angle.
@@ -27,6 +32,9 @@ MODE_NAMES = {0: "LOCK", 1: "FOLLOW", 2: "FPV"}
 MODE_DATA = {"lock": 3, "follow": 4, "fpv": 5}  # PHOTO_VIDEO_HDR command values
 DEADMAN = 0.6  # s: a manual move stops unless the browser keeps renewing it
 SETTLE = 1.1   # s: after the gimbal confirms LOCK, give siyi-pitch time (it re-reads the mode ~1/s) to pause
+HOLD_PERIOD = 0.5                 # s between position checks while holding
+HOLD_TOL_YAW, HOLD_TOL_PITCH = 1.0, 1.5   # deg: correct when further away than this
+YAW_LIMIT, PITCH_LIMITS = 135.0, (-90.0, 25.0)   # SIYI A8 mini mechanical range
 
 
 def _crc16(data: bytes) -> int:  # CRC-16/XMODEM (poly 0x1021, init 0), as SIYI
@@ -77,6 +85,9 @@ class Gimbal:
         self.busy = ""
         self._last_lock = 0.0
         self._lock_seen_at: float | None = None
+        self.hold: tuple[float, float] | None = None   # (yaw, pitch) the panel keeps the gimbal at
+        self.hold_corrections = 0
+        self._hold_task: asyncio.Task | None = None
 
     # ------------------------------------------------------------ transport
     async def _ensure(self) -> None:
@@ -165,6 +176,8 @@ class Gimbal:
             "yaw_tolerance": CONFIG["gimbal"]["yaw_tolerance"],
             "in_position": self.in_position(), "manual": self.manual, "busy": self.busy,
             "manual_ready": bool(self.manual and self._lock_seen_at is not None and time.monotonic() - self._lock_seen_at >= SETTLE),
+            "hold": {"yaw": round(self.hold[0], 1), "pitch": round(self.hold[1], 1), "corrections": self.hold_corrections}
+                    if self.manual and self.hold else None,
             "service": {"name": unit, "active": svc[0]["active"] if svc else "missing",
                         "sub": svc[0]["sub"] if svc else ""},
         }
@@ -175,6 +188,7 @@ class Gimbal:
         self.manual = name != "follow"
         if name == "follow":
             self._lock_seen_at = None
+            self.hold = None
 
     async def move(self, yaw: int, pitch: int) -> None:
         """Rotate at a speed (-100..100) for DEADMAN seconds unless renewed.
@@ -189,6 +203,7 @@ class Gimbal:
             await self._enter_manual()
         if not await self.manual_ready():
             return
+        self.hold = None  # moving: don't pull it back; the new position is held after release
         await self.send(CMD_SPEED, struct.pack("<bb", yaw, pitch))
         if self._stop_handle:
             self._stop_handle.cancel()
@@ -217,10 +232,50 @@ class Gimbal:
         self._lock_seen_at = None
 
     async def stop_move(self) -> None:
+        was_moving = self._stop_handle is not None
         if self._stop_handle:
             self._stop_handle.cancel()
             self._stop_handle = None
         await self.send(CMD_SPEED, struct.pack("<bb", 0, 0))
+        if was_moving and self.manual and not self.busy:
+            asyncio.ensure_future(self._hold_here())
+
+    # ------------------------------------------------------------ position hold (manual control)
+    async def _hold_here(self) -> None:
+        """After a manual move: hold wherever the gimbal came to rest."""
+        await asyncio.sleep(0.5)  # let it stop
+        if self._stop_handle or not self.manual or self.busy:
+            return  # moving again / left manual control
+        if await self.request(CMD_ATT, timeout=0.5) is not None and self.att:
+            self.set_hold(self.att["yaw"], self.att["pitch"])
+
+    def set_hold(self, yaw: float, pitch: float) -> None:
+        self.hold = (max(-YAW_LIMIT, min(YAW_LIMIT, yaw)), max(PITCH_LIMITS[0], min(PITCH_LIMITS[1], pitch)))
+        self.hold_corrections = 0
+        if self._hold_task is None or self._hold_task.done():
+            self._hold_task = asyncio.ensure_future(self._hold_loop())
+
+    async def _hold_loop(self) -> None:
+        n = 0
+        try:
+            while self.manual and self.hold is not None:
+                await asyncio.sleep(HOLD_PERIOD)
+                if self._stop_handle or self.busy or self.hold is None:
+                    continue  # a manual move or Flight position is in progress
+                n += 1
+                if n % 4 == 0:  # every 2 s: has someone else (siyi-pitch, the RC) switched it to FOLLOW?
+                    await self.request(CMD_INFO, timeout=0.3)
+                    if self.mode == 1:
+                        self.hold = None
+                        break
+                if await self.request(CMD_ATT, timeout=0.4) is None or not self.att or self.hold is None:
+                    continue
+                ty, tp = self.hold
+                if abs(self.att["yaw"] - ty) > HOLD_TOL_YAW or abs(self.att["pitch"] - tp) > HOLD_TOL_PITCH:
+                    await self.send(CMD_ANGLE, struct.pack("<hh", int(round(ty * 10)), int(round(tp * 10))))
+                    self.hold_corrections += 1
+        finally:
+            self._hold_task = None
 
     async def simple(self, action: str) -> None:
         if action == "center":
@@ -229,13 +284,11 @@ class Gimbal:
             end = time.monotonic() + 5
             while not await self.manual_ready() and time.monotonic() < end:
                 await asyncio.sleep(0.2)
-            await self.send(CMD_CENTER, b"\x01")
+            await self.stop_move()
+            await self.send(CMD_ANGLE, struct.pack("<hh", 0, 0))  # yaw 0, pitch 0 (same as the CENTER command)
+            self.set_hold(0.0, 0.0)
         elif action in ("zoom_in", "zoom_out", "zoom_stop"):
             await self.send(CMD_ZOOM, {"zoom_in": b"\x01", "zoom_out": b"\xff", "zoom_stop": b"\x00"}[action])
-        elif action == "photo":
-            await self.send(CMD_MODE, b"\x00")
-        elif action == "record":
-            await self.send(CMD_MODE, b"\x02")
         elif action == "lock":
             await self.set_mode("lock")
         else:
@@ -246,6 +299,7 @@ class Gimbal:
         say = log or (lambda m: None)
         async with self._lock:
             self.busy = "flight"
+            self.hold = None  # stop holding the manual position
             try:
                 tgt, _ = self.target()
                 tol = float(CONFIG["gimbal"]["tolerance"])

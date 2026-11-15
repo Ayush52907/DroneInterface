@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from . import audit, camera, files, flightdata, hardware, logs, preflight, services, terminal
 from .alerts import engine as alerts
 from .gimbal import gimbal
-from . import actions, drone, fclink, mapdata, payload
+from . import actions, capture, drone, fclink, mapdata, payload
 from .ros import bridge as ros_bridge
 from .auth import require_user, ws_user
 from .config import CONFIG, WEB_DIR
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     for sid in list(terminal.sessions):
         terminal.kill(sid)
     await ros_bridge.stop()
+    await capture.stop_all()
     await camera.stop_all()
 
 
@@ -455,6 +456,41 @@ def camera_snapshot(idx: int):
         raise HTTPException(409, "Start the preview first")
     name = time.strftime("snapshot_%Y%m%d_%H%M%S.jpg")
     return Response(s.frame, media_type="image/jpeg", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# ------------------------------------------------------------------ photo / video on the Jetson
+@api.get("/capture")
+def capture_status():
+    return capture.status()
+
+
+@api.post("/capture/photo")
+async def capture_photo(idx: int = Body(0, embed=True), user: dict = Depends(require_user)):
+    try:
+        r = await capture.photo(idx)
+    except HTTPException as e:
+        audit.record(user, "camera.photo", f"camera {idx}", False, str(e.detail))
+        raise
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    audit.record(user, "camera.photo", r["path"], True, f"{r['size'] // 1024} KB")
+    return {**r, "status": capture.status()}
+
+
+@api.post("/capture/record")
+async def capture_record(idx: int = Body(0), action: str = Body(...), user: dict = Depends(require_user)):
+    if action not in ("start", "stop"):
+        raise HTTPException(400, "action must be start or stop")
+    try:
+        r = await (capture.start_recording(idx, user.get("login", "?")) if action == "start" else capture.stop_recording(idx))
+    except HTTPException as e:
+        audit.record(user, f"camera.record.{action}", f"camera {idx}", False, str(e.detail))
+        raise
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    audit.record(user, f"camera.record.{action}", r["path"], True,
+                 f"{r['seconds']} s, {r['size'] // (1 << 20)} MB" if action == "stop" else "")
+    return {**r, "status": capture.status()}
 
 
 # ------------------------------------------------------------------ gimbal
