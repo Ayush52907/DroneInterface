@@ -4,8 +4,8 @@ import { Icon, Modal, toast, confirm, fmtTime, usePref } from '../ui.js';
 
 export const TYPE_INFO = {
   service: { label: 'Service running', fields: [['unit', 'Unit', 'rudra_camera.service']] },
-  device: { label: 'Device file present', fields: [['path', 'Path', '/dev/ttyTHS1']] },
-  serial_owner: { label: 'Serial port in use by a process', fields: [['path', 'Path', '/dev/ttyTHS1']] },
+  device: { label: 'Device file present', fields: [['path', 'Path ("fc" = FC port from drone.yaml)', 'fc']] },
+  serial_owner: { label: 'Serial port in use by a process', fields: [['path', 'Path ("fc" = FC port from drone.yaml)', 'fc']] },
   usb: { label: 'USB device connected', fields: [['vid', 'Vendor ID', '10c4'], ['pid', 'Product ID', 'ea60']] },
   link: { label: 'Network link up', fields: [['iface', 'Interface', 'enP8p1s0']] },
   ping: { label: 'Host answers ping', fields: [['host', 'Host / IP', '192.168.144.25']] },
@@ -22,7 +22,7 @@ export const TYPE_INFO = {
   gps_hdop: { label: 'GPS HDOP', fields: [] },
 };
 
-const summary = (c) => (TYPE_INFO[c.type]?.fields || []).map(([k]) => c[k]).filter(v => v !== undefined && v !== '').join(' · ');
+const summary = (c) => (TYPE_INFO[c.type]?.fields || []).map(([k]) => k === 'path' && c[k] === 'fc' ? 'FC port (drone.yaml)' : c[k]).filter(v => v !== undefined && v !== '').join(' · ');
 
 const VERDICT = {
   go: { cls: 'ok', title: 'ALL SYSTEMS GO', sub: 'Every check passed' },

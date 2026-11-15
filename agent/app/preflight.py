@@ -89,6 +89,8 @@ def save(checks: list[dict]) -> list[dict]:
 
 
 def _res(c, ok, detail):
+    if c.get("_fc"):
+        detail = f"{c['path']}: {detail}"
     return {"id": c["id"], "status": "pass" if ok is True else "fail" if ok is False else "unknown", "detail": detail}
 
 
@@ -220,8 +222,23 @@ async def _run_check(c: dict, ctx: dict) -> dict:
         return _res(c, None, f"error: {e}")
 
 
+def _fc_port() -> str | None:
+    from . import drone
+    try:
+        return drone.load()["fc"]["port"]
+    except Exception:
+        return None
+
+
+def _resolve_fc(c: dict) -> dict:
+    """path "fc" in a device / serial_owner check means: the FC port set in drone.yaml."""
+    if c["type"] in ("device", "serial_owner") and str(c.get("path", "")).strip().lower() == "fc":
+        return {**c, "path": _fc_port() or "/dev/null-fc-port-unknown", "_fc": True}
+    return c
+
+
 async def run(checks: list[dict] | None = None) -> dict:
-    checks = [c for c in (checks or load()) if c.get("enabled", True)]
+    checks = [_resolve_fc(c) for c in (checks or load()) if c.get("enabled", True)]
     t0 = time.time()
     types = {c["type"] for c in checks}
     ctx: dict = {}

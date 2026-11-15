@@ -1,14 +1,14 @@
 [
   {
-    "name": "Flight controller UART present",
+    "name": "Flight controller serial port present",
     "type": "device",
-    "path": "/dev/ttyTHS1",
+    "path": "fc",
     "severity": "critical"
   },
   {
     "name": "Flight controller port used by exactly one program",
     "type": "serial_owner",
-    "path": "/dev/ttyTHS1",
+    "path": "fc",
     "severity": "critical"
   },
   {
