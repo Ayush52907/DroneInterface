@@ -33,7 +33,7 @@ DEFAULT = {
     "fc": {"port": "/dev/ttyTHS1", "baud": 115200},
     "mavlink_router": {
         "enabled": False,
-        "clients": {"panel": 14551, "drop_scout": 14550, "drop_drop": 14552, "spare": 14553},
+        "clients": {"panel": 14551, "drop_scout": 14550, "drop_drop": 14552, "spare": 14553, "rudra_sender": 14554},
     },
     "payload": [
         {"name": "Servo 12 (payloads 1 & 2)", "servo": 12, "return_after": 0, "positions": [

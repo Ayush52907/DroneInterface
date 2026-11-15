@@ -89,6 +89,21 @@ else
   rm -f "$SUDOERS.tmp"; c_err "sudoers validation failed"; exit 1
 fi
 
+# ---------------------------------------------------------------- mavlink-router (if installed)
+# keep retrying when the FC serial device is missing (USB-TTL unplugged) instead of giving up after 5 tries
+if [ -x /usr/bin/mavlink-routerd ]; then
+  mkdir -p /etc/systemd/system/mavlink-router.service.d
+  cat > /etc/systemd/system/mavlink-router.service.d/drone-panel.conf <<'EOF'
+# Drone Panel: retry forever (FC serial device may appear later)
+[Unit]
+StartLimitIntervalSec=0
+[Service]
+Restart=always
+RestartSec=2
+EOF
+  c_ok "mavlink-router: restarts until the FC port is available"
+fi
+
 # ---------------------------------------------------------------- systemd
 sed "s/__USER__/$RUN_USER/g" "$SRC/drone-panel.service" > /etc/systemd/system/drone-panel.service
 systemctl daemon-reload
