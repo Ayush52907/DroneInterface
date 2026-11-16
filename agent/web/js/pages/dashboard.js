@@ -36,6 +36,7 @@ export function Dashboard() {
       <span class="grow"></span>
       ${s.power_mode && html`<span class="pill info" title="nvpmodel power mode">⚡ ${s.power_mode.name}</span>`}
       <span class="pill">Up ${fmtDur(s.uptime)}</span>
+      <span class="page-name" title="Drone name (config: name)">${me.name}</span>
     </div>
 
     ${acts.length > 0 && html`<div style="margin-bottom:14px"><${ActionButtons} actions=${acts} running=${run} compact onRun=${(a) => { setShowLog(true); startRun(a); }} /></div>`}
